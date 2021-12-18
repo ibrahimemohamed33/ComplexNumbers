@@ -1,28 +1,26 @@
 # Defines the Complex Numbers and performs the necessary computations
 import math
 
-from fractions import Fraction
-from constants import ORIGIN, exponential
+POSITIVE_BRANCH = "C\[0, infinity)"
+NEGATIVE_BRANCH = "C\(-infinity, 0]"
 
 
 def represent_complex_number(re: float, im: float) -> str:
     '''
     Represents the complex number in a suitable format of a + i * b
     '''
-    frac_re, frac_im = Fraction(re), Fraction(im)
-    re_rep = f"({frac_re.numerator} / {frac_re.denominator})"
-    im_rep = f"({frac_im.numerator} / {frac_im.denominator})"
+    real, imaginary = round(re, 10), round(im, 10)
 
-    if im < 0:
-        if re == 0:
-            return f"- i * ({-frac_im.numerator} / {frac_im.denominator})"
-        return f"{re_rep} /  - i * ({-frac_im.numerator} / {frac_im.denominator})"
-    if im == 0:
-        return f"{re_rep}"
+    if imaginary < 0:
+        if real == 0:
+            return f"- i * {-imaginary}"
+        return f"{real} - i * {-imaginary}"
+    if imaginary == 0:
+        return f"{real}"
 
-    if re == 0:
-        return f"i * {im_rep}"
-    return f"{re_rep} + i * {im_rep}"
+    if real == 0:
+        return f"i * {imaginary}"
+    return f"{real} + i * {imaginary}"
 
 
 class Complex:
@@ -34,7 +32,7 @@ class Complex:
         self.re, self.im = re, im
 
     def __repr__(self) -> str:
-        represent_complex_number(self.re, self.im)
+        return represent_complex_number(self.re, self.im)
 
     def modulus(self):
         '''
@@ -85,7 +83,51 @@ def real(real_number: float):
     return Complex(real_number, 0)
 
 
-def lexiographic_order(p: Complex, q: Complex) -> bool:
+def addition(p: Complex, q: Complex) -> Complex:
+    '''
+    Adds the complex numbers p, q \in C
+    '''
+    return Complex(p.re + q.re, p.im + q.im)
+
+
+def subtraction(p: Complex, q: Complex) -> Complex:
+    '''
+    Subtracts the complex numbers p, q \in C
+    '''
+    return Complex(p.re - q.re, p.im - q.im)
+
+
+def multiply(p: Complex, q: Complex) -> Complex:
+    '''
+    Multiplies the complex numbers p, q \in C
+    '''
+    return Complex(p.re * q.re - p.im * q.im, p.re * q.im + q.re * p.im)
+
+
+def divide(p: Complex, q: Complex) -> Complex:
+    '''
+    Computes p / q using the formula p / q = (p * conj(q)) / |q|^2
+    '''
+    denominator = real(1 / (q.modulus() ** 2))
+    numerator = multiply(p, q.conjugate())
+    return multiply(numerator, denominator)
+
+
+def exponential(theta: float or Complex) -> Complex:
+    '''
+    Represents e^(i * theta) = cos(theta) + i * sin(theta)
+    '''
+    return Complex(math.cos(theta), math.sin(theta))
+
+
+def polar_form(radius: float, theta: float):
+    '''
+    Returns the polar form of z \in C of the form re^(i * theta)
+    '''
+    return multiply(real(radius), exponential(theta))
+
+
+def lexiographically_greater(p: Complex, q: Complex) -> bool:
     '''
     Checks if p > q lexiographically in the complex plane
     '''
@@ -106,20 +148,76 @@ def distance(p: Complex, q: Complex) -> float:
     return subtraction(p, q).modulus()
 
 
-def addition(p: Complex, q: Complex) -> Complex:
-    return Complex(p.re + q.re, p.im + q.im)
-
-
-def subtraction(p: Complex, q: Complex) -> Complex:
-    return Complex(p.re - q.re, p.im - q.im)
-
-
-def multiply(p: Complex, q: Complex) -> Complex:
-    return Complex(p.re * q.re - p.im * q.im, p.re * q.im + q.re * p.im)
-
-
-def polar_form(radius: float, theta: float):
+def point_in_branch(p: Complex, branch: str):
     '''
-    Returns the polar form of z \in C of the form re^(i * theta)
+    Checks if p \in C lies on a branch of C
     '''
-    return multiply(real(radius), exponential(theta))
+    if p.im == 0:
+        if branch == POSITIVE_BRANCH:
+            return p.re >= 0
+        elif branch == NEGATIVE_BRANCH:
+            return p.re <= 0
+        else:
+            raise Exception(f"Unsupported branch {branch}")
+
+    return False
+
+
+def complex_log(p: Complex, branch: str):
+    '''
+    Computes the complex logarithm on a specified branch of log
+    using the formula log(z) = log(|z|) + i * arg(z)
+    '''
+    if not point_in_branch(p, branch):
+        return Complex(math.log(p.modulus()), p.argument())
+
+    raise Exception(
+        f'The inputted point {p} is within the branch {branch}')
+
+
+def complex_exponential(p: Complex):
+    '''
+    Computes the complex exponential using the formula e^(x + iy) = e^x * e^(iy)
+    for p = x + iy
+    '''
+    return multiply(real(math.exp(p.re)), exponential(p.im))
+
+
+def random_expo(p: Complex, q: Complex, branch=POSITIVE_BRANCH) -> Complex:
+    '''
+    Computes p^q using the fact that p^q = e^{qlog(p)}
+    '''
+    return complex_exponential(multiply(q, complex_log(p, branch)))
+
+
+def complex_sine(p: Complex):
+    '''
+    Computes the function sin(p) = (e^(ip) - e^(-ip)) / 2i for p \in C
+    '''
+    denominator = divide(ONE, Complex(0, 2))
+    numerator = subtraction(complex_exponential(multiply(i, p)),
+                            complex_exponential(multiply(neg_i, p)))
+
+    return multiply(denominator, numerator)
+
+
+def complex_cosine(p: Complex):
+    '''
+    Computes the function cos(p) = (e^(ip) + e^(-ip)) / 2 for p \in C
+    '''
+    denominator = real(1 / 2)
+    numerator = addition(complex_exponential(multiply(i, p)),
+                         complex_exponential(multiply(neg_i, p)))
+
+    return multiply(denominator, numerator)
+
+
+def i_power(n: int):
+    '''
+    Computes i^n recursively
+    '''
+    return ONE if n % 4 == 0 else multiply(i, i_power(n - 1))
+
+
+i, neg_i = Complex(0, 1), Complex(0, -1)
+ORIGIN, ONE = Complex(0, 0), Complex(1, 0)
