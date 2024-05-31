@@ -3,24 +3,14 @@ from constants import *
 
 class Function:
     def __init__(self, function: str, variable: str) -> None:
+        '''
+        Please see the documentation on how to input a readable function
+        '''
         self.variable = variable
-        self.function = self.__simplify_function(function)
+        self.function = self.simplify_function(function)
 
     def __repr__(self) -> str:
         return self.function
-
-    def __degree(self, function: str) -> int:
-        '''
-        Computes the degree of a formatted function by finding the largest polynomial
-        degree of its terms
-        '''
-        max_degree = 0
-        for index in range(len(function)):
-            if function[index] == EXPONENT:
-                degree = int(function[index + 1])
-                if degree > max_degree and function[index - 1] == self.variable:
-                    max_degree = degree
-        return max_degree
 
     def __clean_function(self, function: str):
         '''
@@ -36,6 +26,7 @@ class Function:
 
     def __is_polynomial(self, f: str, index: int) -> bool:
         '''
+        Checks if f is a polynomial
         '''
         return (
             (f[index] == self.variable and f[index - 1] != EXPONENT) and
@@ -70,40 +61,23 @@ class Function:
         for component in components:
             coeff = self.__extract_coefficient(component)
             deg = self.__compute_degree(component)
-            degree_total = (self.variable + EXPONENT + str(deg)) if deg else ''
+            variable_term = self.variable + EXPONENT
+            degree_total = variable_term + (str(deg) if deg else str(0))
 
             if coeff:
-                simplified_coeff = (coeff + ' * ') if deg else coeff
+                simplified_coeff = (coeff + ' * ')
             else:
-                simplified_coeff = ''
+                simplified_coeff = '1 * '
 
             simplified_components.append(simplified_coeff + degree_total)
 
-        return simplified_components
+        return sorted(simplified_components, key=lambda x: int(x[-1]))
 
-    def is_L1(self):
+    def simplify_function(self, function: str):
         '''
-        Checks if the function is L^1, meaning that the integral of its absolute
-        value when evaluated at a curve (e.g. circle, square) goes to zero.
-
-        We also know || \integral(f) || <= len(region) * max(f).
-
-        So if f is a simple, entire rational function of two complex polynomials, then
-        we know it is equivalent to the ratio of its largest terms for sufficiently
-        large z. Moreover, the length of these regions is proportional to a linear factor,
-        so we want to make sure the degree of the numerator + 1 < degree of denominator
-
-        In doing so, we know this being true implies f is L^1
+        Simplifies function into a suitable format to perform additional
+        complex computations
         '''
-        if DENOMINATOR not in self.function:
-            return False
-
-        denom_index = self.function.find(DENOMINATOR)
-        num_degree = self.__degree(self.function[:denom_index])
-        denom_degree = self.__degree(self.function[denom_index + 1:])
-        return num_degree + 1 < denom_degree
-
-    def __simplify_function(self, function: str):
         formatted_func = self.__clean_function(function).split(DENOMINATOR)
 
         if len(formatted_func) == 1:
@@ -123,4 +97,50 @@ class Function:
             return numerator
 
         denominator = self.__simplify_components(denom.split('+'))
-        return numerator + '/' + self.__reformat_function(denominator)
+        return numerator + DENOMINATOR + self.__reformat_function(denominator)
+
+
+class AnalyticFunction(Function):
+    def __init__(self, function: str, variable: str) -> None:
+        super().__init__(function, variable)
+
+    def __repr__(self) -> str:
+        return self.function
+
+    def __max_degree(self, function: str):
+        '''
+        Computes the degree of a formatted function by finding the largest polynomial
+        degree of its terms
+        '''
+        return int(function.replace('(', '').replace(')', '')[-1])
+
+    def approaches_zero(self):
+        '''
+        Checks if the function approaches zero when evaluated over a large curve 
+        (e.g. circle, square) goes to zero.
+
+        We also know || \integral(f) || <= len(region) * max(f).
+
+        So if f is a simple, entire rational function of two complex polynomials, then
+        we know it is equivalent to the ratio of its largest terms for sufficiently
+        large z. Moreover, the length of these regions is proportional to a linear factor,
+        so we want to make sure the degree of the numerator + 1 < degree of denominator
+        '''
+        if DENOMINATOR not in self.function:
+            return False
+
+        denom_index = self.function.find(DENOMINATOR)
+        num_degree = self.__max_degree(self.function[1:denom_index])
+        denom_degree = self.__max_degree(self.function[denom_index + 1:])
+        return num_degree + 1 < denom_degree
+
+    def find_zeroes(self, function: str):
+        '''
+        \C is algebraically closed so all zeroes of a polynomial are contained in
+        \C. In addition, we use the property that if \alpha is a root, then 
+        its conjugate is also a root.
+        '''
+        # the zeroes of function are the zeroes of its numerator
+        if DENOMINATOR in function:
+            numerator = function.split(DENOMINATOR)[0]
+            function = numerator

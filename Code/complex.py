@@ -1,45 +1,153 @@
 # Defines the Complex Numbers and performs the necessary computations
 import math
-
-POSITIVE_BRANCH = "C\[0, infinity)"
-NEGATIVE_BRANCH = "C\(-infinity, 0]"
-
-
-def represent_complex_number(re: float, im: float) -> str:
-    '''
-    Represents the complex number in a suitable format of a + i * b
-    '''
-    real, imaginary = round(re, 10), round(im, 10)
-
-    if imaginary < 0:
-        if real == 0:
-            return f"- i * {-imaginary}"
-        return f"{real} - i * {-imaginary}"
-    if imaginary == 0:
-        return f"{real}"
-
-    if real == 0:
-        return f"i * {imaginary}"
-    return f"{real} + i * {imaginary}"
+import fractions
+from typing import Union
 
 
 class Complex:
+    """
+    Defines the base class for representing complex numbers, alongside basic
+    operations like addition, multiplication, subtraction, division, and
+    """
+    # the amount of decimal places to represent complex numbers
+    DECIMAL_PLACES = 15
     def __init__(self, re, im) -> None:
         '''
         Initializes the Complex class which attempts to represent the complex 
         numbers in python
         '''
-        self.re, self.im = re, im
-
+        [self.re, self.im] = map(lambda x: round(x, self.DECIMAL_PLACES), [re, im])
+        
+    def __clean_operation(self, other: any):
+        '''
+        Ensures the other parameter is a complex number when performing 
+        operation. If it's an int or float we convert that to a complex number 
+        and return it.
+        '''
+        if isinstance(other, int) or isinstance(other, float):
+            return Complex(re=other, im=0)
+        if isinstance(other, Complex):
+            return other
+        if not isinstance(other, Complex):
+            raise ValueError(
+                "You're trying to operate a complex number with a non-complex number"
+            )
+    
+    def __convert_decimal_to_fraction(self, number: Union[float, int]) -> str:
+        fraction = fractions.Fraction(number).limit_denominator()
+        num = f"{'- ' if fraction.numerator < 0 else ''}{abs(fraction.numerator)}"
+        if fraction.denominator == 1:
+            return f"{num}"
+        return f"{num}/{fraction.denominator}"
+            
     def __repr__(self) -> str:
-        return represent_complex_number(self.re, self.im)
-
+        '''
+        Represents the complex number in a suitable format of a + i * b
+        '''
+        [
+            real, imaginary
+        ] = map(
+            lambda x: self.__convert_decimal_to_fraction(x),
+            [self.re, self.im]
+        )
+        if self.re == 0:
+            return f"{imaginary} * i"
+        if self.im == 0:
+            return f"{real}"
+            
+        return f"{real}{' + ' if self.im > 0 else ' '}{imaginary} * i"
+    
+    def __float__(self):
+        '''
+        Converts a complex number into a float for arithmetic purposes
+        '''
+        if self.im != 0:
+            raise TypeError(
+                f"Cannot convert {self} to float since it has a non-zero imaginary part"
+            )
+            
+        return float(self.re)
+    
+    def __eq__(self, other) -> bool:
+        other = self.__clean_operation(other)
+        return self.im == other.im and self.re == other.re
+    
+    def __neg__(self):
+        return -1 * self
+    
+    def __pos__(self):
+        return self
+    
+    def __mul__(self, other):
+        '''
+        Defines multiplication for complex numbers
+        '''
+        other = self.__clean_operation(other)
+        return Complex(
+            re=self.re * other.re - self.im * other.im, 
+            im=self.re * other.im + other.re * self.im
+        )
+    
+    def __rmul__(self, other):
+        '''
+        Defines right-handed multiplication. Since C is commutative under 
+        multiplication we can return __mul__
+        '''
+        return self.__mul__(other)
+    
+    def __add__(self, other):
+        '''
+        Adds two complex numbers and returns a complex number
+        '''
+        other = self.__clean_operation(other)
+        return Complex(re=self.re + other.re, im=self.im + other.im)
+    
+    def __radd__(self, other):
+        '''
+        Defines right-handed addition in C, which is equivalent to left handed
+        addition since C is commutative under addition.
+        '''
+        return self.__add__(other)
+    
+    def __sub__(self, other):
+        '''
+        Computes self - other by adding self with -1 * other
+        '''
+        other = -1 * self.__clean_operation(other)
+        return self + other
+    
+    def __rsub__(self, other):
+        '''
+        Computes other - self by adding other with -1 * self
+        '''
+        other = self.__clean_operation(other)
+        return other - self
+    
+    def __truediv__(self, other):
+        '''
+        If p is self and q is other, then the function computes p / q using 
+        the formula p / q = (p * conj(q)) / (q * conj(q)).
+        
+        But q * conj(q) = Re(q)^2 + Im(q)^2 which is real, so we
+        '''
+        other = self.__clean_operation(other)
+        if other == Complex(0, 0):
+            raise ZeroDivisionError(f"You're dividing ('{self}') by 0")
+        
+        conj_other = other.conjugate()
+        divisor = float(other * conj_other)
+        return conj_other * Complex(self.re / divisor, self.im / divisor)  
+    
+    def __rtruediv__(self, other):
+        other = self.__clean_operation(other)
+        return other / self
+        
     def modulus(self):
         '''
-        Returns the modulus of z = a + i * b using the formula \sqrt(a^2 + b^2)
+        Returns the modulus of z = a + i * b by computing sqrt(z * conj(z))
         '''
-        return math.sqrt(self.re**2 + self.im**2)
-
+        return math.sqrt(self * self.conjugate())
+    
     def argument(self):
         '''
         Returns the argument of a function between [-pi / 2, pi / 2]. If z == 0,
@@ -59,165 +167,34 @@ class Complex:
         Returns the conjugate of z = a + ib as z_bar = a - ib
         '''
         return Complex(self.re, -self.im)
-
-    def power(self, n: int):
-        '''
-        Computes z^n using the fact that z = r * e^(i * theta), where r and theta
-        is z's modulus and argument, respectively. Therefore, z^n = r^n * e^(i * n * theta)
-        '''
-        return polar_form(self.modulus() ** n, self.argument() * n)
-
+    
     def inverse(self):
         '''
-        Computes z^-1 using the formula z^-1 = congjugate(z) / |z|^2 in C^*
-        If z == 0, then it has no multiplicative inverse
+        Computes z^-1 = 1 / z so long as z != 0
         '''
-        if not is_equal(self, ORIGIN):
-            return multiply(real(1 / self.modulus() ** 2), self.conjugate())
+        return Complex(1, 0) / self
+    
+    def polar_form(self):
+        r = self.modulus()
+        theta = self.argument()
+        ei_theta = Complex(math.cos(theta), math.sin(theta))
+        return r * ei_theta
+    
+    def __pow__(self, n: int):
+        '''
+        Computes z^n by representing z as its polar form r * e^(i * theta), 
+        where r and theta are z's modulus and argument, respectively. 
+        
+        Therefore, z^n = r^n * e^(i * n * theta)
+        '''
+        if not isinstance(n, int):
+            raise ValueError(
+                f"{n} is not an int. To work with powers for non integers, use
+                ComplexFunctions.pow function with your complex numbers"
+            )
+            
+        r = self.modulus()
+        theta = self.argument()
+        ei_theta = Complex(math.cos(n * theta), math.sin(n * theta))
+        return (r ** n) * ei_theta
 
-
-def real(real_number: float):
-    '''
-    Embeds the real number into the complex plane
-    '''
-    return Complex(real_number, 0)
-
-
-def addition(p: Complex, q: Complex) -> Complex:
-    '''
-    Adds the complex numbers p, q \in C
-    '''
-    return Complex(p.re + q.re, p.im + q.im)
-
-
-def subtraction(p: Complex, q: Complex) -> Complex:
-    '''
-    Subtracts the complex numbers p, q \in C
-    '''
-    return Complex(p.re - q.re, p.im - q.im)
-
-
-def multiply(p: Complex, q: Complex) -> Complex:
-    '''
-    Multiplies the complex numbers p, q \in C
-    '''
-    return Complex(p.re * q.re - p.im * q.im, p.re * q.im + q.re * p.im)
-
-
-def divide(p: Complex, q: Complex) -> Complex:
-    '''
-    Computes p / q using the formula p / q = (p * conj(q)) / |q|^2
-    '''
-    denominator = real(1 / (q.modulus() ** 2))
-    numerator = multiply(p, q.conjugate())
-    return multiply(numerator, denominator)
-
-
-def exponential(theta: float or Complex) -> Complex:
-    '''
-    Represents e^(i * theta) = cos(theta) + i * sin(theta)
-    '''
-    return Complex(math.cos(theta), math.sin(theta))
-
-
-def polar_form(radius: float, theta: float):
-    '''
-    Returns the polar form of z \in C of the form re^(i * theta)
-    '''
-    return multiply(real(radius), exponential(theta))
-
-
-def lexiographically_greater(p: Complex, q: Complex) -> bool:
-    '''
-    Checks if p > q lexiographically in the complex plane
-    '''
-    return (p.re > q.re) or (p.re == q.re and p.im > q.im)
-
-
-def is_equal(p: Complex, q: Complex) -> bool:
-    '''
-    Checks if p, q \in C are equal
-    '''
-    return p.re == q.re and p.im == q.im
-
-
-def distance(p: Complex, q: Complex) -> float:
-    '''
-    Computes the Euclidean Distance between two points p, q \in C
-    '''
-    return subtraction(p, q).modulus()
-
-
-def point_in_branch(p: Complex, branch: str):
-    '''
-    Checks if p \in C lies on a branch of C
-    '''
-    if p.im == 0:
-        if branch == POSITIVE_BRANCH:
-            return p.re >= 0
-        elif branch == NEGATIVE_BRANCH:
-            return p.re <= 0
-        else:
-            raise Exception(f"Unsupported branch {branch}")
-
-    return False
-
-
-def complex_log(p: Complex, branch: str):
-    '''
-    Computes the complex logarithm on a specified branch of log
-    using the formula log(z) = log(|z|) + i * arg(z)
-    '''
-    if not point_in_branch(p, branch):
-        return Complex(math.log(p.modulus()), p.argument())
-
-    raise Exception(
-        f'The inputted point {p} is within the branch {branch}')
-
-
-def complex_exponential(p: Complex):
-    '''
-    Computes the complex exponential using the formula e^(x + iy) = e^x * e^(iy)
-    for p = x + iy
-    '''
-    return multiply(real(math.exp(p.re)), exponential(p.im))
-
-
-def random_expo(p: Complex, q: Complex, branch=POSITIVE_BRANCH) -> Complex:
-    '''
-    Computes p^q using the fact that p^q = e^{qlog(p)}
-    '''
-    return complex_exponential(multiply(q, complex_log(p, branch)))
-
-
-def complex_sine(p: Complex):
-    '''
-    Computes the function sin(p) = (e^(ip) - e^(-ip)) / 2i for p \in C
-    '''
-    denominator = divide(ONE, Complex(0, 2))
-    numerator = subtraction(complex_exponential(multiply(i, p)),
-                            complex_exponential(multiply(neg_i, p)))
-
-    return multiply(denominator, numerator)
-
-
-def complex_cosine(p: Complex):
-    '''
-    Computes the function cos(p) = (e^(ip) + e^(-ip)) / 2 for p \in C
-    '''
-    denominator = real(1 / 2)
-    numerator = addition(complex_exponential(multiply(i, p)),
-                         complex_exponential(multiply(neg_i, p)))
-
-    return multiply(denominator, numerator)
-
-
-def i_power(n: int):
-    '''
-    Computes i^n recursively
-    '''
-    return ONE if n % 4 == 0 else multiply(i, i_power(n - 1))
-
-
-i, neg_i = Complex(0, 1), Complex(0, -1)
-ORIGIN, ONE = Complex(0, 0), Complex(1, 0)
